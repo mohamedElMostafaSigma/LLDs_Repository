@@ -1,4 +1,3 @@
-[Number_Reservation_Activation_LLD_Java.md](https://github.com/user-attachments/files/24857218/Number_Reservation_Activation_LLD_Java.md)
 # Number Reservation & SIM Activation - Low Level Design (LLD)
 # New Customer Onboarding & SIM Activation Flow
 
@@ -6,10 +5,10 @@
 | Item | Value |
 |------|-------|
 | Version | 2.0 |
-| Date | 2026-01-22 |
+| Date | 2026-02-02 |
 
 
-> **Note**: This document maps the legacy `SalesAPIController` flow to the new Java Microservices architecture, preserving all business rules and integration details.
+> **Note**: This document maps the legacy [SalesAPIController](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#88-99) flow to the new Java Microservices architecture, preserving all business rules and integration details.
 
 ---
 
@@ -25,18 +24,18 @@ The **Number Reservation & SIM Activation** flow is the core journey for acquiri
 
 ### 1.2 Microservices Architecture Map
 
-The monolithic `SalesAPIController` logic is decomposed into the following microservices:
+The monolithic [SalesAPIController](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#88-99) logic is decomposed into the following microservices:
 
 | Logical Component | Legacy (.NET) | Java Microservice | Responsibility |
 |-------------------|---------------|-------------------|----------------|
-| **Entry/Validation** | `ValidateIdNew` | `onboarding-service` | ID validation, TCC eligibility check, Initial session |
-| **Inventory** | `GetMSISDNs` | `huaweibssservice` | Proxy to BSS `QueryAvailableNumber` |
-| **Order Mgmt** | `UpdateOrder` | `ordermgmtservice` | Order creation, state machine, persistence |
+| **Entry/Validation** | [ValidateIdNew](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#921-1095) | `onboarding-service` | ID validation, TCC eligibility check, Initial session |
+| **Inventory** | [GetMSISDNs](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#2983-2999) | `huaweibssservice` | Proxy to BSS `QueryAvailableNumber` |
+| **Order Mgmt** | [UpdateOrder](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#1163-1550) | `ordermgmtservice` | Order creation, state machine, persistence |
 | **Catalog** | `GetPlans` | `digitalproductcatalog` | Plan & Addon details, Pricing |
-| **Integration** | `TCCHelper` | `rbmdigitalcustomintegration` (semati) | TCC `CheckEligibility`, `AddNumber` |
-| **Integration** | `BssApiHelper` | `huaweibssservice` | BSS `OperateMsisdn`, `CreateSaleOrder` |
-| **Customer** | `GetCustomerInfo` | `digitalcustomermanagement` | Customer profile creation/retrieval |
-| **Invoicing** | `GenerateEInvoiceLocal` | `einvoice-service` (TBD) | ZATCA e-Invoice generation (Future Implementation) |
+| **Integration** | `TCCHelper` | `rbmdigitalcustomintegration` (semati) | TCC [CheckEligibility](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/TCCApiHelper.cs#1722-1792), [AddNumber](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/TCCApiHelper.cs#1001-1120) |
+| **Integration** | [BssApiHelper](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#34-4260) | `huaweibssservice` | BSS `OperateMsisdn`, `CreateSaleOrder` |
+| **Customer** | [GetCustomerInfo](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#908-920) | `digitalcustomermanagement` | Customer profile creation/retrieval |
+| **Invoicing** | [GenerateEInvoiceLocal](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#3468-3485) | `einvoice-service` (TBD) | ZATCA e-Invoice generation (Future Implementation) |
 
 ### 1.3 Activation Types (SubType & IsPostpaid)
 
@@ -54,11 +53,11 @@ The system uses two distinct fields to control the flow:
 | 5 | PostpaidDataSIM | Postpaid Data SIM | Single Postpaid |
 | 6 | Device | Device Sale | (Depends on Plan) |
 
-**Legacy Note**: The distinction between Hybrid/Broadband creating dual accounts is handled via `BssApiHelper` logic based on `sub_type` + `is_postpaid` flags, but the primary enum follow the table above.
+**Legacy Note**: The distinction between Hybrid/Broadband creating dual accounts is handled via [BssApiHelper](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#34-4260) logic based on `sub_type` + `is_postpaid` flags, but the primary enum follow the table above.
 
 ### 1.4 SubType to TCC SubscriptionType Mapping
 
-The order's `sub_type` (0-6) maps to TCC `SubscriptionType` (0-2):
+The order's `sub_type` (0-6) maps to TCC [SubscriptionType](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#2917-2948) (0-2):
 
 | Order SubType | TCC SubscriptionType | Flow |
 |---------------|---------------------|------|
@@ -151,7 +150,7 @@ sequenceDiagram
 3.  **TCC Eligibility**:
     - Call `semati-service` (`/v1/semati/api/eligibility`).
     - **Retry Logic (Code 605)**:
-        - TCC uses its own `SubscriptionType` parameter (0=Prepaid, 1=Hybrid, 2=Broadband).
+        - TCC uses its own [SubscriptionType](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#2917-2948) parameter (0=Prepaid, 1=Hybrid, 2=Broadband).
         - If `code == 605` AND TCC `SubscriptionType == 1` (Hybrid):
         - **RETRY** call with TCC `SubscriptionType = 2` (Broadband).
         - *Note*: This is distinct from the order's `sub_type` field.
@@ -163,7 +162,7 @@ sequenceDiagram
 
 ### 3.2 Step 2: Get MSISDNs
 
-**Legacy:** `SalesAPIController.GetMSISDNs`, `BssApiHelper.cs`
+**Legacy:** `SalesAPIController.GetMSISDNs`, [BssApiHelper.cs](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs)
 **Service:** `huaweibssservice`
 **Endpoint:** `POST /inventory/queryAvailableNumber`
 
@@ -209,7 +208,7 @@ sequenceDiagram
         - **First Extra SIM**: FREE.
         - **Subsequent SIMs**: 25 SAR each.
         - **VAT**: Add 15% VAT for Prepaid (`SubType=0`), No VAT for Postpaid (`SubType=3`).
-        - *Formula*: `(Count - 1) * 25 * (VAT_Multiplier)`.
+        - *Formula*: [(Count - 1) * 25 * (VAT_Multiplier)](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#111-128).
 3.  **VAT Calculation (Main Number)**:
     - If `is_postpaid == FALSE`: `MSISDNCost` = `BasePrice` * 1.15.
     - If `is_postpaid == TRUE`: `MSISDNCost` = `BasePrice` (No VAT upfront).
@@ -261,21 +260,21 @@ sequenceDiagram
 2.  **SIM Validation**:
     - **Regex**: `^899661\d{13,14}$` (Accepts both 19 and 20 digit patterns for **ANY** SIM type).
     - **eSIM Flow**:
-        - If `isESim=true`, Call `huaweibssservice` -> `PickESim` to allocate ICCID/IMSI.
+        - If `isESim=true`, Call `huaweibssservice` -> [PickESim](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#2464-2497) to allocate ICCID/IMSI.
         - Skip regex check for allocated eSIMs (trusted source).
 3.  **TCC Activation**:
     - Call `semati-service`.
-    - **Retry Logic (Code 605)**: If TCC returns 605, retry logic depends on `SubscriptionType` (Mapped from Plan/Offering, not just SubType).
+    - **Retry Logic (Code 605)**: If TCC returns 605, retry logic depends on [SubscriptionType](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#2917-2948) (Mapped from Plan/Offering, not just SubType).
     - **Audit**: Log request/responses to `tcc_traces` table.
 4.  **BSS Activation**:
-    - **Standard Order**: Call `huaweibssservice` -> `CreateSalesOrder`.
-    - **MNP Order (SubType 1, 4)**: Call `huaweibssservice` -> `CreateSalesMNPOrder`.
-    - **Device Order (SubType 6)**: Call `huaweibssservice` -> `CreateSalesOrderWithDevice`.
+    - **Standard Order**: Call `huaweibssservice` -> [CreateSalesOrder](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#3381-3420).
+    - **MNP Order (SubType 1, 4)**: Call `huaweibssservice` -> [CreateSalesMNPOrder](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#3421-3460).
+    - **Device Order (SubType 6)**: Call `huaweibssservice` -> [CreateSalesOrderWithDevice](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#3341-3380).
     - **Logic**: Use `BillCycleType` "15" (Prepaid) or "28" (Postpaid).
 5.  **Critical Success Flag**:
     - If BSS Success: Set `IndividualCheckComplete = TRUE` in DB.
     - **SAGA Implementation**:
-        - If BSS Fails AND `IndividualCheckComplete == FALSE`: Auto-Rollback TCC (`CancelNumber`).
+        - If BSS Fails AND `IndividualCheckComplete == FALSE`: Auto-Rollback TCC ([CancelNumber](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/TCCApiHelper.cs#610-687)).
         - If BSS Fails AND `IndividualCheckComplete == TRUE`: DO NOT Rollback (Manual fix required).
     - **IMSI Derivation** (All SIM Types):
         - Formula: `"420100000" + ICCID.Substring(13, 6)`
@@ -285,12 +284,12 @@ sequenceDiagram
     - **OTP**: OTP tokens expire after 2 minutes (`DateTime.Now.AddMinutes(2)`).
     - **Wallet Deduction Flow**:
         1. **Validation**: Check `seller.balance >= orderTotal` at EACH step.
-        2. **Deduction**: ONLY after BSS `CreateSalesOrder` succeeds.
+        2. **Deduction**: ONLY after BSS [CreateSalesOrder](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/BssApiHelper.cs#3381-3420) succeeds.
         3. **Commission Credit**: After deduction (POS only).
         4. **Tracking**: Update `wallet_balance_before`, `wallet_balance_after`.
     - **Contract**: Generate eContract (Postpaid).
     - **eInvoice**: If `Channel IN [5, 6, 8, 10]`, call `einvoice-service`.
-    - **Nafath Note**: Logic migrated from legacy `TCCApiHelper` (`CreateNafathAppRequest`).
+    - **Nafath Note**: Logic migrated from legacy [TCCApiHelper](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/Common/Helpers/TCCApiHelper.cs#24-1838) ([CreateNafathAppRequest](file:///d:/SlsApp/RedBullSalesPortalRestSharp/RedBullSalesPortal/RedBullSalesPortal.Web/Modules/SalesAPI/SalesAPIController.cs#3334-3340)).
 
 ---
 
